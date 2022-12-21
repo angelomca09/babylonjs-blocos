@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+
+    <title>Babylon.js sample code</title>
+
+    <!-- Babylon.js -->
+    <script src="https://code.jquery.com/pep/0.4.2/pep.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dat-gui/0.6.2/dat.gui.min.js"></script>
+    <script src="https://preview.babylonjs.com/ammo.js"></script>
+    <script src="https://preview.babylonjs.com/cannon.js"></script>
+    <script src="https://preview.babylonjs.com/Oimo.js"></script>
+    <script src="https://preview.babylonjs.com/libktx.js"></script>
+    <script src="https://preview.babylonjs.com/earcut.min.js"></script>
+    <script src="https://preview.babylonjs.com/babylon.js"></script>
+    <script src="https://preview.babylonjs.com/inspector/babylon.inspector.bundle.js"></script>
+    <script src="https://preview.babylonjs.com/materialsLibrary/babylonjs.materials.min.js"></script>
+    <script src="https://preview.babylonjs.com/proceduralTexturesLibrary/babylonjs.proceduralTextures.min.js"></script>
+    <script src="https://preview.babylonjs.com/postProcessesLibrary/babylonjs.postProcess.min.js"></script>
+    <script src="https://preview.babylonjs.com/loaders/babylonjs.loaders.js"></script>
+    <script src="https://preview.babylonjs.com/serializers/babylonjs.serializers.min.js"></script>
+    <script src="https://preview.babylonjs.com/gui/babylon.gui.min.js"></script>
+
+    <style>
+        html,
+        body {
+            overflow: hidden;
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            padding: 0;
+        }
+
+        #renderCanvas {
+            width: 100%;
+            height: 100%;
+            touch-action: none;
+        }
+    </style>
+</head>
+
+<body>
+    <canvas id="renderCanvas"></canvas>
+    <script>
+        var canvas = document.getElementById("renderCanvas");
+
+        var engine = null;
+        var scene = null;
+        var createDefaultEngine = function () { return new BABYLON.Engine(canvas, true, { preserveDrawingBuffer: true, stencil: true }); };
+
+        var ammount = 6 // Número de Blocos que formam o cenário inicial
+        var ammountText
+        var helperText
+
+        var materialIndex = 0 // 'Bloco' (material) a ser inserido
+        var materials = [] // Inicialmente vazio. Preenchido em função 'setMaterials()'
+        var textures = [] // Inicialmente Vazio. Preenchido em função 'setTextures()'
+        var wireframe = false
+
+        var blocks = [] // Inicialmente vazio. Preenchido em função 'createButtons()'
+
+        function createScene() {
+            scene = new BABYLON.Scene(engine);
+            createCamera()
+            createLight()
+            setTextures()
+            setMaterials()
+            createBoard()
+            manageKeyboardEvent(scene)
+            manageClickEvents(scene)
+            createButtons()
+            createBlockBar()
+            createHelperScreen()
+            return scene;
+        }
+
+        function setTextures() {
+            textures.push(
+                new BABYLON.Texture("textures/marble.jpg", scene),
+                new BABYLON.Texture("textures/granite.jpg", scene),
+                new BABYLON.Texture("textures/wood.jpg", scene),
+                new BABYLON.Texture("textures/grass.jpg", scene),
+                new BABYLON.Texture("textures/water.jpg", scene),
+            )
+        }
+
+        function setMaterials() {
+            var material1 = new BABYLON.StandardMaterial("material1", scene)
+            material1.diffuseTexture = textures[0]
+            materials.push(material1)
+            var material2 = new BABYLON.StandardMaterial("material2", scene)
+            material2.diffuseTexture = textures[1]
+            materials.push(material2)
+            var material3 = new BABYLON.StandardMaterial("material3", scene)
+            material3.diffuseTexture = textures[2]
+            materials.push(material3)
+            var material4 = new BABYLON.StandardMaterial("material4", scene)
+            material4.diffuseTexture = textures[3]
+            materials.push(material4)
+            var material5 = new BABYLON.StandardMaterial("material5", scene)
+            material5.diffuseTexture = textures[4]
+            materials.push(material5)
+        }
+
+        function createCamera() {
+            var camera = new BABYLON.ArcRotateCamera("Camera", 0, 0, 0, BABYLON.Vector3.Zero(), scene);
+            camera.setPosition(new BABYLON.Vector3(10, 15, 10));
+            camera.attachControl(canvas, true);
+        }
+
+        function createLight() {
+            var light = new BABYLON.PointLight("light", new BABYLON.Vector3(10, 20, 10), scene);
+            var light2 = new BABYLON.PointLight("light", new BABYLON.Vector3(-10, -20, -10), scene);
+        }
+
+        function createBoard() {
+            var object
+            for (var i = 0; i < ammount; i++) {
+                for (var j = 0; j < ammount; j++) {
+                    object = new Block(materials[Math.abs(j - i) % 2])
+                    object.mesh.position.x = j - 2
+                    object.mesh.position.z = i - 2
+                }
+            }
+        }
+
+        function manageClickEvents(scene) {
+            scene.onPointerDown = function (evt, pickInfo) {
+                if (pickInfo.hit && pickInfo.pickedMesh.name === "mesh") {
+                    switch (evt.which) { // Verificação de botão do mouse
+                        case 1: // Botão Esquerdo - remoção de bloco
+                            pickInfo.pickedMesh.dispose()
+                            break;
+                        case 3: // Botão Direito - inserção de bloco
+                            var material = materials[materialIndex]
+                            var object = new Block(material)
+                            object.mesh.position.x = pickInfo.pickedMesh.position.x
+                            object.mesh.position.y = pickInfo.pickedMesh.position.y
+                            object.mesh.position.z = pickInfo.pickedMesh.position.z
+                            switch (pickInfo.faceId) { // Verificação de Face do 'box' selecionado
+                                case 0:
+                                case 1: object.mesh.position.z = pickInfo.pickedMesh.position.z + 1; break
+                                case 2:
+                                case 3: object.mesh.position.z = pickInfo.pickedMesh.position.z - 1; break
+                                case 4:
+                                case 5: object.mesh.position.x = pickInfo.pickedMesh.position.x + 1; break
+                                case 6:
+                                case 7: object.mesh.position.x = pickInfo.pickedMesh.position.x - 1; break
+                                case 8:
+                                case 9: object.mesh.position.y = pickInfo.pickedMesh.position.y + 1; break
+                                case 10:
+                                case 11: object.mesh.position.y = pickInfo.pickedMesh.position.y - 1; break
+                            }
+                            break
+                    }
+                }
+            }
+        }
+
+        function manageKeyboardEvent(scene) {
+            scene.actionManager = new BABYLON.ActionManager(scene)
+            scene.actionManager.registerAction(new BABYLON.ExecuteCodeAction(
+                BABYLON.ActionManager.OnKeyDownTrigger, function (event) {
+                    var key = event.sourceEvent.key
+                    key = key.toUpperCase()
+                    switch (key) {
+                        case "1": handleBlockClick(0); break
+                        case "2": handleBlockClick(1); break
+                        case "3": handleBlockClick(2); break
+                        case "4": handleBlockClick(3); break
+                        case "5": handleBlockClick(4); break
+                        case "W": wireframeToggle(); break
+                        case "H": helperToggle(); break
+                    }
+                }
+            ))
+        }
+
+        function createButtons() {
+            var gui = BABYLON.GUI.AdvancedDynamicTexture.CreateFullscreenUI("GUI")
+
+            var container = new BABYLON.GUI.Rectangle()
+            container.width = "250px"
+            container.height = "40px"
+            container.background = "grey";
+            container.top = -440
+
+            var minusButton = BABYLON.GUI.Button.CreateSimpleButton("minusButton", "-")
+            minusButton.width = "30px"
+            minusButton.height = "30px"
+            minusButton.paddingTop = "5px"
+            minusButton.paddingRight = "5px"
+            minusButton.background = "darkgrey"
+            minusButton.left = "-100px"
+
+            ammountText = new BABYLON.GUI.TextBlock();
+            ammountText.text = `${ammount}x${ammount}`
+            ammountText.left = "-60px"
+
+            var plusButton = BABYLON.GUI.Button.CreateSimpleButton("plusButton", "+")
+            plusButton.width = "30px"
+            plusButton.height = "30px"
+            plusButton.paddingTop = "5px"
+            plusButton.paddingLeft = "5px"
+            plusButton.background = "darkgrey"
+            plusButton.left = "-20px"
+
+            var applyButton = BABYLON.GUI.Button.CreateSimpleButton("applyButton", "Reiniciar")
+            applyButton.width = "90px"
+            applyButton.height = "30px"
+            applyButton.paddingTop = "5px"
+            applyButton.paddingLeft = "5px"
+            applyButton.background = "darkgrey"
+            applyButton.left = "70px"
+
+            minusButton.onPointerClickObservable.add(function () {
+                if (ammount - 1 >= 1) {
+                    ammount--
+                    ammountText.text = `${ammount}x${ammount}`
+                }
+            })
+
+            plusButton.onPointerClickObservable.add(function () {
+                if (ammount + 1 <= 10) {
+                    ammount++
+                    ammountText.text = `${ammount}x${ammount}`
+                }
+            })
+
+            applyButton.onPointerClickObservable.add(function () {
+                restartScene()
+            })
+
+            container.addControl(applyButton)
+            container.addControl(ammountText)
+            container.addControl(minusButton)
+            container.addControl(plusButton)
+            gui.addControl(container)
+        }
+
+        function createBlockBar() {
+            var gui = BABYLON.GUI.AdvancedDynamicTexture.CreateFullscreenUI("GUI")
+
+            var container = new BABYLON.GUI.Rectangle()
+            container.width = "250px"
+            container.height = "85px"
+            container.background = "grey";
+            container.top = 410
+
+            var marbleBlock = new BABYLON.GUI.Image("marbleBlock", "textures/marble.jpg");
+            marbleBlock.width = "40px"
+            marbleBlock.height = "40px"
+            marbleBlock.left = -100
+            marbleBlock.top = 10
+            blocks.push(marbleBlock)
+            marbleText = new BABYLON.GUI.TextBlock();
+            marbleText.text = "1"
+            marbleText.left = -100
+            marbleText.top = -20
+
+            var graniteBlock = new BABYLON.GUI.Image("graniteBlock", "textures/granite.jpg");
+            graniteBlock.width = "30px"
+            graniteBlock.height = "30px"
+            graniteBlock.left = -50
+            graniteBlock.top = 10
+            blocks.push(graniteBlock)
+            graniteText = new BABYLON.GUI.TextBlock();
+            graniteText.text = "2"
+            graniteText.left = -50
+            graniteText.top = -20
+
+            var woodBlock = new BABYLON.GUI.Image("woodBlock", "textures/wood.jpg");
+            woodBlock.width = "30px"
+            woodBlock.height = "30px"
+            woodBlock.top = 10
+            blocks.push(woodBlock)
+            woodText = new BABYLON.GUI.TextBlock();
+            woodText.text = "3"
+            woodText.top = -20
+
+            var grassBlock = new BABYLON.GUI.Image("grassBlock", "textures/grass.jpg");
+            grassBlock.width = "30px"
+            grassBlock.height = "30px"
+            grassBlock.left = 50
+            grassBlock.top = 10
+            blocks.push(grassBlock)
+            grassText = new BABYLON.GUI.TextBlock();
+            grassText.text = "4"
+            grassText.top = -20
+            grassText.left = 50
+
+            var waterBlock = new BABYLON.GUI.Image("waterBlock", "textures/water.jpg");
+            waterBlock.width = "30px"
+            waterBlock.height = "30px"
+            waterBlock.left = 100
+            waterBlock.top = 10
+            blocks.push(waterBlock)
+            waterText = new BABYLON.GUI.TextBlock();
+            waterText.text = "5"
+            waterText.top = -20
+            waterText.left = 100
+
+            container.addControl(marbleBlock)
+            container.addControl(marbleText)
+            container.addControl(graniteBlock)
+            container.addControl(graniteText)
+            container.addControl(woodBlock)
+            container.addControl(woodText)
+            container.addControl(grassBlock)
+            container.addControl(grassText)
+            container.addControl(waterBlock)
+            container.addControl(waterText)
+            gui.addControl(container)
+        }
+
+        function createHelperScreen() {
+            var gui = BABYLON.GUI.AdvancedDynamicTexture.CreateFullscreenUI("GUI")
+
+            var container = new BABYLON.GUI.Rectangle()
+            container.horizontalAlignment = 0
+            container.height = "150px"
+            container.width = "400px"
+            container.background = "grey";
+            container.top = -385
+            container.isVisible = true
+            helperText = container
+
+            text = new BABYLON.GUI.TextBlock();
+            text.text = `Comandos:
+1-5 : Escolhe um material
+MB1 : Remove o bloco selecionado
+MB2 : Insere um bloco na face selecionada
+W   : Altera visualização wireframe das texturas
+H   : Altera a visibilidade do campo de ajuda`
+
+
+            container.addControl(text)
+            gui.addControl(container)
+        }
+
+        function handleBlockClick(index) {
+            materialIndex = index
+            for (var i in blocks) {
+                blocks[i].height = (i == index) ? "40px" : "30px"
+                blocks[i].width = (i == index) ? "40px" : "30px"
+            }
+        }
+
+        function wireframeToggle() {
+            materials.forEach(material => {
+                material.wireframe = !wireframe
+            });
+            wireframe = !wireframe
+        }
+
+        function helperToggle(){
+            helperText.isVisible = !helperText.isVisible
+        }
+
+        function restartScene() {
+            if (scene)
+                scene.dispose();
+            materialIndex = 0
+            materials = []
+            textures = []
+            wireframe = false
+            scene = createScene()
+        }
+
+        // Classe construtora de Blocos
+        class Block {
+            constructor(material) {
+                this.mesh = BABYLON.MeshBuilder.CreateBox("mesh", {}, scene)
+                this.mesh.material = material
+            }
+        }
+
+        engine = createDefaultEngine();
+        if (!engine) throw 'engine should not be null.';
+
+        scene = createScene();
+
+        engine.runRenderLoop(function () {
+            if (scene) {
+                scene.render();
+            }
+        });
+
+        // Resize
+        window.addEventListener("resize", function () {
+            engine.resize();
+        });
+    </script>
+</body>
+
+</html>
